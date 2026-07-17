@@ -194,13 +194,19 @@ export function extractEvents(icsBlobs, rangeStart, rangeEnd, calIndex, tz) {
 
 // Positions one day's timed events as boxes in the 6am-10pm grid: top/height
 // from start/end time, left/width/z from a greedy column-packing pass so
-// overlapping events don't stack illegibly. A genuine pair (exactly 2 events)
-// starting at different times cascades (nearly full width, later one layered
-// on top) since that reads as "one nests inside the other"; a pair starting
-// at the same time splits side by side instead, reading as parallel options.
-// 3+-way overlaps always fall back to an even column split, since staggered
+// overlapping events don't stack illegibly.
+//
+// Events are also grouped into "chords" — events sharing the exact same
+// start time. Exactly 2 chords is a clean cascade: the earlier chord sits
+// full width behind, the later chord layers on top of it (reads as "this
+// nests inside/near the end of that"), each chord internally split side by
+// side among its own events if it has more than one (e.g. a long appointment
+// plus two same-time appointments landing near its end: the long one is the
+// full-width background, the pair cascades on top of it while still sitting
+// side by side with each other). Anything else (a single chord, or 3+
+// distinct start times) falls back to an even column split, since staggered
 // peeks of 2-3 chars each get visually ambiguous once there's more than one
-// seam to spot.
+// cascade seam to spot.
 // ponytail: this exists — approximates each overlap cluster with one shared
 // column count rather than a fully optimal skyline packing; fine for the
 // handful of concurrent events a family calendar actually has.
@@ -228,13 +234,27 @@ export function layoutTimedEvents(dayEvents, tz) {
 
   const finalizeCluster = () => {
     const numCols = columnEnds.length || 1;
-    // Cascading only makes sense for a genuine pair: two events that start
-    // at the same time read as parallel options (split side by side), while
-    // two starting at different times read as one nesting inside the other
-    // (cascade). 3+-way overlaps always fall back to an even split.
-    const pairwise = cluster.length === 2;
-    const sameStart = pairwise && cluster[0].clampedStart === cluster[1].clampedStart;
-    for (const ev of cluster) laidOut.push({ ...ev, numCols, pairwise, sameStart });
+
+    const chordMap = new Map();
+    for (const ev of cluster) {
+      const list = chordMap.get(ev.clampedStart) ?? [];
+      list.push(ev);
+      chordMap.set(ev.clampedStart, list);
+    }
+    const chords = [...chordMap.keys()].sort((a, b) => a - b).map((start) => chordMap.get(start));
+
+    if (chords.length === 2) {
+      const [backChord, frontChord] = chords;
+      for (const [i, ev] of backChord.entries()) {
+        laidOut.push({ ...ev, layout: "cascade-back", chordIndex: i, chordSize: backChord.length });
+      }
+      for (const [i, ev] of frontChord.entries()) {
+        laidOut.push({ ...ev, layout: "cascade-front", chordIndex: i, chordSize: frontChord.length });
+      }
+    } else {
+      for (const ev of cluster) laidOut.push({ ...ev, layout: "split", numCols });
+    }
+
     cluster = [];
     columnEnds = [];
   };
@@ -258,14 +278,21 @@ export function layoutTimedEvents(dayEvents, tz) {
 
   return laidOut.map((ev) => {
     const shade = shadeFor(ev.calIndex);
-    let left, width;
-    if (ev.pairwise && !ev.sameStart) {
-      left = ev.col * STAGGER_OFFSET_PCT;
-      width = 100 - left;
+    let left, width, z;
+    if (ev.layout === "cascade-back" || ev.layout === "cascade-front") {
+      const isFront = ev.layout === "cascade-front";
+      const regionLeft = isFront ? STAGGER_OFFSET_PCT : 0;
+      const regionWidth = isFront ? 100 - STAGGER_OFFSET_PCT : 100;
+      const subWidth = regionWidth / ev.chordSize;
+      const gutter = ev.chordSize > 1 ? 2 : 0; // only needed when splitting a chord among itself
+      left = regionLeft + ev.chordIndex * subWidth;
+      width = Math.max(subWidth - gutter, 4);
+      z = isFront ? 1 : 0; // front chord always paints over the back chord
     } else {
       const colWidth = 100 / ev.numCols;
       left = ev.col * colWidth;
       width = Math.max(colWidth - 2, 4); // small gutter between adjacent columns
+      z = ev.col;
     }
     return {
       title: ev.title,
@@ -277,7 +304,7 @@ export function layoutTimedEvents(dayEvents, tz) {
       height: round1(Math.max(((ev.clampedEnd - ev.clampedStart) / DAY_WINDOW_MIN) * 100, MIN_BOX_HEIGHT_PCT)),
       left: round1(left),
       width: round1(width),
-      z: ev.col,
+      z,
     };
   });
 }

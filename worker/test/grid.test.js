@@ -122,6 +122,38 @@ test("layoutTimedEvents falls back to an even column split for 3+-way overlaps",
   assert.ok(boxes.every((b) => b.width < 34)); // even split, not staggered
 });
 
+test("layoutTimedEvents cascades a long appointment behind a same-start pair landing near its end", () => {
+  // Exactly the real Wednesday case: one long interview block, plus two
+  // podiatry appointments both starting at 4:30pm, overlapping its last
+  // half hour. Two start times -> two chords -> cascade; the pair chord
+  // should still split side by side within itself.
+  const blob = ics(
+    "BEGIN:VEVENT\r\nUID:16\r\nDTSTART:20260715T090000Z\r\nDTEND:20260715T170000Z\r\nSUMMARY:Interviews\r\nEND:VEVENT\r\n" +
+      "BEGIN:VEVENT\r\nUID:17\r\nDTSTART:20260715T163000Z\r\nDTEND:20260715T170000Z\r\nSUMMARY:Podiatry A\r\nEND:VEVENT\r\n" +
+      "BEGIN:VEVENT\r\nUID:18\r\nDTSTART:20260715T163000Z\r\nDTEND:20260715T170000Z\r\nSUMMARY:Podiatry B\r\nEND:VEVENT"
+  );
+  const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
+  const boxes = layoutTimedEvents(events, "UTC");
+  assert.equal(boxes.length, 3);
+
+  const interviews = boxes.find((b) => b.title === "Interviews");
+  const podiatryA = boxes.find((b) => b.title === "Podiatry A");
+  const podiatryB = boxes.find((b) => b.title === "Podiatry B");
+
+  // The long appointment is the full-width background.
+  assert.equal(interviews.left, 0);
+  assert.equal(interviews.width, 100);
+
+  // The pair cascades on top of it (starts at the stagger offset)...
+  assert.equal(podiatryA.left, 14);
+  assert.equal(podiatryB.left, 57);
+  assert.ok(podiatryA.z > interviews.z && podiatryB.z > interviews.z);
+
+  // ...but sits side by side with itself, not on top of itself.
+  assert.notEqual(podiatryA.left, podiatryB.left);
+  assert.ok(podiatryA.width < 50 && podiatryB.width < 50);
+});
+
 test("layoutTimedEvents drops events entirely outside the 6am-10pm window", () => {
   const blob = ics("BEGIN:VEVENT\r\nUID:10\r\nDTSTART:20260715T023000Z\r\nDTEND:20260715T030000Z\r\nSUMMARY:Late night\r\nEND:VEVENT");
   const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
