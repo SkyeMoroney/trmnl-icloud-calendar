@@ -125,7 +125,7 @@ test("buildPayload builds a Mon-Sun week, highlights today, and clips/positions 
     day: 15,
     events: [...bannerEvents, ...timedEvents],
     calendars: [{ index: 1, name: "Trips" }, { index: 2, name: "Home" }],
-    todayParts: { year: 2026, month0: 6, day: 15 },
+    todayParts: { year: 2026, month0: 6, day: 15, hour: 13, minute: 0 },
     tz: "UTC",
   });
 
@@ -143,6 +143,30 @@ test("buildPayload builds a Mon-Sun week, highlights today, and clips/positions 
   assert.equal(payload.multiday_events[0].col, 1); // clipped to Monday, the visible week's first column
   assert.equal(payload.multiday_events[0].span, 2); // only Mon-Tue of the trip fall in this week
   assert.ok(payload.multiday_events[0].bg_shade);
+
+  // 1:00pm -> (13*60 - 6*60) / (16*60) * 100 = 43.75 -> 43.8
+  assert.equal(wednesday.now_line_top, 43.8);
+  const otherDay = payload.week_days.find((d) => d.date === "2026-07-13");
+  assert.equal(otherDay.now_line_top, null);
+});
+
+test("now_line_top rounds to the nearest 15 minutes and hides outside the 6am-10pm window", () => {
+  const base = {
+    year: 2026,
+    month0: 6,
+    day: 15,
+    events: [],
+    calendars: [],
+    tz: "UTC",
+  };
+
+  // 9:07am rounds to 9:00 -> (9*60-360)/960*100 = 18.75 -> 18.8
+  const morning = buildPayload({ ...base, todayParts: { year: 2026, month0: 6, day: 15, hour: 9, minute: 7 } });
+  assert.equal(morning.week_days.find((d) => d.is_today).now_line_top, 18.8);
+
+  // 11:00pm is outside the visible 6am-10pm window
+  const late = buildPayload({ ...base, todayParts: { year: 2026, month0: 6, day: 15, hour: 23, minute: 0 } });
+  assert.equal(late.week_days.find((d) => d.is_today).now_line_top, null);
 });
 
 test("weekInstantRange pads a day on each side of the visible Mon-Sun week", () => {

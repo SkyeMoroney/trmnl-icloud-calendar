@@ -260,17 +260,30 @@ export function layoutTimedEvents(dayEvents, tz) {
   });
 }
 
-function buildWeekDays(year, month0, day, timedEventsByDay, todayKey, tz) {
+// Position of the "now" line within the 6am-10pm grid, rounded to the
+// nearest 15 minutes since that's how often the plugin actually refreshes —
+// showing it to exact-minute precision would just look stale between polls.
+// Returns null when "now" falls outside the visible window.
+function nowLineTop(todayParts) {
+  const rawMin = todayParts.hour * 60 + todayParts.minute;
+  const rounded = Math.round(rawMin / 15) * 15;
+  if (rounded < DAY_START_MIN || rounded > DAY_END_MIN) return null;
+  return round1(((rounded - DAY_START_MIN) / DAY_WINDOW_MIN) * 100);
+}
+
+function buildWeekDays(year, month0, day, timedEventsByDay, todayKey, tz, todayParts) {
   const monday = mondayOfWeek(year, month0, day);
   const days = [];
   for (let i = 0; i < 7; i++) {
     const cell = daysAdd(monday.year, monday.month0, monday.day, i);
     const key = ymdKey(cell.year, cell.month0, cell.day);
+    const isToday = key === todayKey;
     days.push({
       date: key,
       day: cell.day,
       weekday: WEEKDAY_LABELS_MON_FIRST[i],
-      is_today: key === todayKey,
+      is_today: isToday,
+      now_line_top: isToday ? nowLineTop(todayParts) : null,
       events: layoutTimedEvents(timedEventsByDay.get(key) || [], tz),
     });
   }
@@ -334,7 +347,7 @@ export function buildPayload({ year, month0, day, events, calendars, todayParts,
   }
 
   const weekKeys = weekDayKeys(year, month0, day);
-  const week_days = buildWeekDays(year, month0, day, timedEventsByDay, todayKey, tz);
+  const week_days = buildWeekDays(year, month0, day, timedEventsByDay, todayKey, tz, todayParts);
   const multiday_events = buildMultidayBars(events, weekKeys);
 
   const next_events = [...events]

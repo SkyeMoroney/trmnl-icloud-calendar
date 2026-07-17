@@ -1,7 +1,7 @@
 name: iCloud Multi-Calendar
 strategy: polling
 polling_verb: get
-refresh_interval: 60
+refresh_interval: 15
 no_screen_padding: no
 dark_mode: no
 
