@@ -37,21 +37,38 @@ async function handleCalendars(request) {
   }
 }
 
+// A real CalDAV href only ever has "http" once, right at the start. If a
+// Calendar N field has two URLs pasted into it with no separator (an easy
+// mistake copying out of the /calendars curl output), this catches it
+// before it becomes an opaque CalDAV 400.
+function looksLikeMultipleUrls(href) {
+  return href.indexOf("http", 4) !== -1;
+}
+
 async function handleTrmnl(request) {
   const url = new URL(request.url);
   const appleId = request.headers.get("X-Apple-Id");
   const appPassword = request.headers.get("X-App-Password");
   const tz = url.searchParams.get("tz") || "Australia/Perth";
-  const selectedHrefs = ["cal1", "cal2", "cal3", "cal4", "cal5"]
-    .map((k) => url.searchParams.get(k))
-    .filter((v) => v && v.trim());
+  const slots = ["cal1", "cal2", "cal3", "cal4", "cal5"]
+    .map((k, i) => ({ slot: i + 1, href: url.searchParams.get(k) }))
+    .filter((s) => s.href && s.href.trim());
 
-  if (!appleId || !appPassword || selectedHrefs.length === 0) {
+  if (!appleId || !appPassword || slots.length === 0) {
     return Response.json({
       has_data: false,
       error: "Missing Apple ID, app-specific password, or no calendar selected.",
     });
   }
+
+  const bad = slots.find((s) => looksLikeMultipleUrls(s.href));
+  if (bad) {
+    return Response.json({
+      has_data: false,
+      error: `Calendar ${bad.slot} URL looks like it has two URLs pasted together with no separator. Reopen the plugin instance and check that field holds exactly one calendar URL.`,
+    });
+  }
+  const selectedHrefs = slots.map((s) => s.href);
 
   try {
     const known = await discoverCalendars(appleId, appPassword);
