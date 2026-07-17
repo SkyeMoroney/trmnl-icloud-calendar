@@ -76,10 +76,24 @@ test("layoutTimedEvents positions a 9am-5pm event correctly in the 6am-10pm grid
   assert.equal(box.width, 98); // full width minus the gutter
 });
 
-test("layoutTimedEvents cascades an exactly-2-way overlap instead of splitting evenly", () => {
+test("layoutTimedEvents splits a same-start-time pair side by side, not staggered", () => {
+  // Two haircuts booked for the same 10:50 slot read as parallel options.
   const blob = ics(
     "BEGIN:VEVENT\r\nUID:8\r\nDTSTART:20260715T105000Z\r\nDTEND:20260715T111500Z\r\nSUMMARY:Cut A\r\nEND:VEVENT\r\n" +
       "BEGIN:VEVENT\r\nUID:9\r\nDTSTART:20260715T105000Z\r\nDTEND:20260715T111500Z\r\nSUMMARY:Cut B\r\nEND:VEVENT"
+  );
+  const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
+  const boxes = layoutTimedEvents(events, "UTC");
+  assert.equal(boxes.length, 2);
+  assert.deepEqual(boxes.map((b) => b.left).sort((a, b) => a - b), [0, 50]);
+  assert.ok(boxes.every((b) => b.width < 50)); // narrower than full width since they share the row
+});
+
+test("layoutTimedEvents cascades a pair with different start times instead of splitting", () => {
+  // A short meeting starting partway through a long one reads as "nested inside it".
+  const blob = ics(
+    "BEGIN:VEVENT\r\nUID:14\r\nDTSTART:20260713T090000Z\r\nDTEND:20260713T170000Z\r\nSUMMARY:Interviews\r\nEND:VEVENT\r\n" +
+      "BEGIN:VEVENT\r\nUID:15\r\nDTSTART:20260713T130000Z\r\nDTEND:20260713T140000Z\r\nSUMMARY:Chat\r\nEND:VEVENT"
   );
   const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
   const boxes = layoutTimedEvents(events, "UTC");

@@ -194,11 +194,13 @@ export function extractEvents(icsBlobs, rangeStart, rangeEnd, calIndex, tz) {
 
 // Positions one day's timed events as boxes in the 6am-10pm grid: top/height
 // from start/end time, left/width/z from a greedy column-packing pass so
-// overlapping events don't stack illegibly. Exactly-2-way overlaps cascade
-// (each card nearly full width, later one layered on top) since that reads
-// better with only two things to disambiguate; 3+-way overlaps fall back to
-// an even column split, since staggered peeks of 2-3 chars each get visually
-// ambiguous once there's more than one seam to spot.
+// overlapping events don't stack illegibly. A genuine pair (exactly 2 events)
+// starting at different times cascades (nearly full width, later one layered
+// on top) since that reads as "one nests inside the other"; a pair starting
+// at the same time splits side by side instead, reading as parallel options.
+// 3+-way overlaps always fall back to an even column split, since staggered
+// peeks of 2-3 chars each get visually ambiguous once there's more than one
+// seam to spot.
 // ponytail: this exists — approximates each overlap cluster with one shared
 // column count rather than a fully optimal skyline packing; fine for the
 // handful of concurrent events a family calendar actually has.
@@ -226,7 +228,13 @@ export function layoutTimedEvents(dayEvents, tz) {
 
   const finalizeCluster = () => {
     const numCols = columnEnds.length || 1;
-    for (const ev of cluster) laidOut.push({ ...ev, numCols });
+    // Cascading only makes sense for a genuine pair: two events that start
+    // at the same time read as parallel options (split side by side), while
+    // two starting at different times read as one nesting inside the other
+    // (cascade). 3+-way overlaps always fall back to an even split.
+    const pairwise = cluster.length === 2;
+    const sameStart = pairwise && cluster[0].clampedStart === cluster[1].clampedStart;
+    for (const ev of cluster) laidOut.push({ ...ev, numCols, pairwise, sameStart });
     cluster = [];
     columnEnds = [];
   };
@@ -251,7 +259,7 @@ export function layoutTimedEvents(dayEvents, tz) {
   return laidOut.map((ev) => {
     const shade = shadeFor(ev.calIndex);
     let left, width;
-    if (ev.numCols === 2) {
+    if (ev.pairwise && !ev.sameStart) {
       left = ev.col * STAGGER_OFFSET_PCT;
       width = 100 - left;
     } else {
