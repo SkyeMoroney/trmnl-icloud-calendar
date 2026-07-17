@@ -47,40 +47,34 @@ custom_fields:
     description: Used to decide "today" and which day an event falls on. Defaults to Perth if left blank.
 
   - keyname: calendar_1
-    name: Calendar 1
-    field_type: xhrSelect
-    endpoint: "{{ worker_url }}/calendars"
-    depends_on: app_password
-    optional: true
+    name: Calendar 1 URL
+    field_type: string
     description: >-
-      Save this plugin instance once with Backend URL + Apple ID +
-      App-Specific Password filled in first — this dropdown can't list your
-      calendars until those are saved. Then reopen the instance to pick one.
+      Paste a calendar's CalDAV URL here. Look them up by running: curl -X
+      POST YOUR_BACKEND_URL/calendars -H "Content-Type: application/json"
+      -d '{"apple_id":"you@icloud.com","app_password":"your-app-password"}'
+      — it returns {"Calendar Name": "url", ...}; copy the url you want.
 
   - keyname: calendar_2
-    name: Calendar 2
-    field_type: xhrSelect
-    endpoint: "{{ worker_url }}/calendars"
-    depends_on: app_password
+    name: Calendar 2 URL
+    field_type: string
     optional: true
+    description: Optional — same lookup as Calendar 1.
 
   - keyname: calendar_3
-    name: Calendar 3
-    field_type: xhrSelect
-    endpoint: "{{ worker_url }}/calendars"
-    depends_on: app_password
+    name: Calendar 3 URL
+    field_type: string
     optional: true
+    description: Optional — same lookup as Calendar 1.
 
   - keyname: calendar_4
-    name: Calendar 4
-    field_type: xhrSelect
-    endpoint: "{{ worker_url }}/calendars"
-    depends_on: app_password
+    name: Calendar 4 URL
+    field_type: string
     optional: true
+    description: Optional — same lookup as Calendar 1.
 
   - keyname: calendar_5
-    name: Calendar 5
-    field_type: xhrSelect
-    endpoint: "{{ worker_url }}/calendars"
-    depends_on: app_password
+    name: Calendar 5 URL
+    field_type: string
     optional: true
+    description: Optional — same lookup as Calendar 1.

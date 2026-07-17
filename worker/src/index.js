@@ -1,9 +1,8 @@
 import { discoverCalendars, fetchEvents } from "./caldav.js";
 import { extractEvents, buildPayload, weekInstantRange, zonedParts } from "./grid.js";
 
-// xhrSelect fields are queried by a browser-side request from TRMNL's own
-// dashboard, i.e. cross-origin from this worker's domain — without CORS
-// headers the browser blocks it before our handler ever runs.
+// /calendars is meant for a manual curl lookup (see README), but CORS costs
+// nothing to leave on in case it's ever called from a browser too.
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -15,18 +14,6 @@ function withCors(response) {
   return response;
 }
 
-// TRMNL's exact xhrSelect POST shape isn't pinned down in public docs, so we
-// check a few plausible shapes rather than assume one.
-function pickField(body, keyname) {
-  return (
-    body?.[keyname] ??
-    body?.[`settings_custom_fields_values_${keyname}`] ??
-    body?.settings_custom_fields_values?.[keyname] ??
-    body?.custom_fields_values?.[keyname] ??
-    undefined
-  );
-}
-
 async function handleCalendars(request) {
   let body = {};
   try {
@@ -34,8 +21,8 @@ async function handleCalendars(request) {
   } catch {
     // empty/non-JSON body falls through to the missing-credentials response below
   }
-  const appleId = pickField(body, "apple_id");
-  const appPassword = pickField(body, "app_password");
+  const appleId = body?.apple_id;
+  const appPassword = body?.app_password;
   if (!appleId || !appPassword) {
     return Response.json([{ "Enter Apple ID + app-specific password above first": "" }]);
   }

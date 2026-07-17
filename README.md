@@ -13,14 +13,17 @@ own Apple ID — nothing here is tied to whoever publishes the recipe.
   CalDAV directly to `caldav.icloud.com`, so nothing is stored server-side:
   Apple ID and app-specific password arrive fresh on every request as TRMNL
   plugin custom field values.
-  - `POST /calendars` — lists the account's calendars (used by the `xhrSelect`
-    dropdowns in the plugin form).
+  - `POST /calendars` — lists the account's calendars as `{"name": "url", ...}`.
+    TRMNL has no reliable way to turn this into a live dropdown in the plugin
+    form (an `xhrSelect` field was tried and didn't populate in practice), so
+    this is a manual lookup: run it with `curl` once, copy the calendar URLs
+    you want into the plugin's Calendar 1–5 fields.
   - `GET /trmnl` — the polling endpoint. Fetches events for the selected
     calendars, expands recurrences, and returns the week-grid JSON TRMNL
     renders.
 - **`settings.yml`** — the TRMNL private plugin manifest: a `worker_url`
   field (each installer's own deployed backend), Apple ID, app-specific
-  password, time zone, and 5 calendar pickers.
+  password, time zone, and 5 calendar URL fields (pasted manually).
 - **`templates/`** — Liquid markup for all four TRMNL layout sizes
   (`full` = week grid, others = compact upcoming-events list).
 
@@ -58,17 +61,19 @@ cd plugin-zip && zip -j ../trmnl-icloud-calendar-plugin.zip *
 1. Go to [Private Plugin settings](https://usetrmnl.com/plugin_settings?keyname=private_plugin)
    → **Import new** → select that ZIP. TRMNL creates the plugin and adds it
    to your playlist.
-2. Open the new plugin instance and fill in **Backend URL**, **Apple ID**,
-   and **App-Specific Password** (generate one at appleid.apple.com →
-   Sign-In and Security → App-Specific Passwords — never your real Apple ID
-   password) — **leave Calendar 1–5 blank** — then **save**.
-3. Reopen the instance. Now that credentials are saved, the Calendar 1–5
-   dropdowns can query your account and populate live. Pick your calendars
-   and save again.
-
-(Step 2/3 is a two-save dance because the `xhrSelect` dropdowns need
-credentials that already exist server-side before they can call out to your
-backend — there's no way to make the first save also populate them.)
+2. Look up your calendar URLs once:
+   ```bash
+   curl -X POST YOUR_BACKEND_URL/calendars \
+     -H "Content-Type: application/json" \
+     -d '{"apple_id":"you@icloud.com","app_password":"your-app-password"}'
+   ```
+   Returns `{"Home": "https://caldav.icloud.com/.../home/", ...}` — a URL per
+   calendar.
+3. Open the new plugin instance and fill in **Backend URL**, **Apple ID**,
+   **App-Specific Password** (generate one at appleid.apple.com → Sign-In
+   and Security → App-Specific Passwords — never your real Apple ID
+   password), and paste up to 5 of the URLs from step 2 into **Calendar 1–5
+   URL**. Save.
 
 ## Publish as a community recipe
 
