@@ -1,6 +1,20 @@
 import { discoverCalendars, fetchEvents } from "./caldav.js";
 import { extractEvents, buildPayload, weekInstantRange, zonedParts } from "./grid.js";
 
+// xhrSelect fields are queried by a browser-side request from TRMNL's own
+// dashboard, i.e. cross-origin from this worker's domain — without CORS
+// headers the browser blocks it before our handler ever runs.
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
+
+function withCors(response) {
+  for (const [key, value] of Object.entries(CORS_HEADERS)) response.headers.set(key, value);
+  return response;
+}
+
 // TRMNL's exact xhrSelect POST shape isn't pinned down in public docs, so we
 // check a few plausible shapes rather than assume one.
 function pickField(body, keyname) {
@@ -87,11 +101,14 @@ async function handleTrmnl(request) {
 export default {
   async fetch(request) {
     const url = new URL(request.url);
+    if (request.method === "OPTIONS") {
+      return withCors(new Response(null, { status: 204 }));
+    }
     if (url.pathname === "/calendars" && request.method === "POST") {
-      return handleCalendars(request);
+      return withCors(await handleCalendars(request));
     }
     if (url.pathname === "/trmnl" && request.method === "GET") {
-      return handleTrmnl(request);
+      return handleTrmnl(request); // polled server-to-server by TRMNL, not a browser request — no CORS needed
     }
     return new Response("Not found", { status: 404 });
   },
