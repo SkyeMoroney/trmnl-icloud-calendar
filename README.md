@@ -47,17 +47,28 @@ can provision a Worker — you never need to run `wrangler` yourself either way.
 
 ## Create the TRMNL plugin
 
-1. TRMNL dashboard → Plugins → Private Plugin → New.
-2. Under **Import/Export**, paste in the contents of `settings.yml`, or
-   manually recreate the strategy/custom fields/polling settings it
-   describes.
-3. Paste each file in `templates/` into the matching layout tab
-   (Full, Half horizontal, Half vertical, Quadrant) in the Markup editor.
-4. Add a plugin instance: paste your deployed backend URL into "Your Backend
-   URL", enter your Apple ID + an app-specific password (generate one at
-   appleid.apple.com → Sign-In and Security → App-Specific Passwords — never
-   your real Apple ID password), then use the Calendar 1–5 dropdowns to pick
-   which calendars to show.
+TRMNL's private plugin import takes a **flat ZIP** (`settings.yml` +
+`*.liquid` files, no subfolders) — build one from this repo:
+
+```bash
+cd /tmp && mkdir -p plugin-zip && cp /path/to/repo/settings.yml /path/to/repo/templates/*.liquid plugin-zip/
+cd plugin-zip && zip -j ../trmnl-icloud-calendar-plugin.zip *
+```
+
+1. Go to [Private Plugin settings](https://usetrmnl.com/plugin_settings?keyname=private_plugin)
+   → **Import new** → select that ZIP. TRMNL creates the plugin and adds it
+   to your playlist.
+2. Open the new plugin instance and fill in **Backend URL**, **Apple ID**,
+   and **App-Specific Password** (generate one at appleid.apple.com →
+   Sign-In and Security → App-Specific Passwords — never your real Apple ID
+   password) — **leave Calendar 1–5 blank** — then **save**.
+3. Reopen the instance. Now that credentials are saved, the Calendar 1–5
+   dropdowns can query your account and populate live. Pick your calendars
+   and save again.
+
+(Step 2/3 is a two-save dance because the `xhrSelect` dropdowns need
+credentials that already exist server-side before they can call out to your
+backend — there's no way to make the first save also populate them.)
 
 ## Publish as a community recipe
 

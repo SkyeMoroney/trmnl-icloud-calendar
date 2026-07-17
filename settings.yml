@@ -51,7 +51,11 @@ custom_fields:
     field_type: xhrSelect
     endpoint: "{{ worker_url }}/calendars"
     depends_on: app_password
-    description: Fill in Backend URL + Apple ID + App-Specific Password above, then reopen this dropdown.
+    optional: true
+    description: >-
+      Save this plugin instance once with Backend URL + Apple ID +
+      App-Specific Password filled in first — this dropdown can't list your
+      calendars until those are saved. Then reopen the instance to pick one.
 
   - keyname: calendar_2
     name: Calendar 2
