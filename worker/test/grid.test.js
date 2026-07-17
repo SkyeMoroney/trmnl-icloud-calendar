@@ -1,6 +1,14 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { extractEvents, buildPayload, weekInstantRange, zonedParts, shadeFor } from "../src/grid.js";
+import {
+  extractEvents,
+  buildPayload,
+  weekInstantRange,
+  zonedParts,
+  shadeFor,
+  layoutTimedEvents,
+  HOUR_LABELS,
+} from "../src/grid.js";
 
 function ics(vevents) {
   return `BEGIN:VCALENDAR\r\nVERSION:2.0\r\n${vevents}\r\nEND:VCALENDAR\r\n`;
@@ -56,6 +64,43 @@ test("extractEvents flags a single-day all-day event as a banner too (iCal conve
   assert.equal(events[0].endDayKey, "2026-07-15");
 });
 
+test("layoutTimedEvents positions a 9am-5pm event correctly in the 6am-10pm grid", () => {
+  const blob = ics(
+    "BEGIN:VEVENT\r\nUID:7\r\nDTSTART:20260715T090000Z\r\nDTEND:20260715T170000Z\r\nSUMMARY:Interviews\r\nEND:VEVENT"
+  );
+  const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
+  const [box] = layoutTimedEvents(events, "UTC");
+  assert.equal(box.top, 18.8); // (9am-6am)/16h = 18.75%, rounded to 1dp
+  assert.equal(box.height, 50); // 8h/16h = 50%
+  assert.equal(box.left, 0);
+  assert.equal(box.width, 98); // full width minus the gutter
+});
+
+test("layoutTimedEvents splits two overlapping events into side-by-side columns", () => {
+  const blob = ics(
+    "BEGIN:VEVENT\r\nUID:8\r\nDTSTART:20260715T105000Z\r\nDTEND:20260715T111500Z\r\nSUMMARY:Cut A\r\nEND:VEVENT\r\n" +
+      "BEGIN:VEVENT\r\nUID:9\r\nDTSTART:20260715T105000Z\r\nDTEND:20260715T111500Z\r\nSUMMARY:Cut B\r\nEND:VEVENT"
+  );
+  const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
+  const boxes = layoutTimedEvents(events, "UTC");
+  assert.equal(boxes.length, 2);
+  assert.deepEqual(boxes.map((b) => b.left).sort((a, b) => a - b), [0, 50]);
+  assert.ok(boxes.every((b) => b.width < 50)); // narrower than full width since they share the row
+});
+
+test("layoutTimedEvents drops events entirely outside the 6am-10pm window", () => {
+  const blob = ics("BEGIN:VEVENT\r\nUID:10\r\nDTSTART:20260715T023000Z\r\nDTEND:20260715T030000Z\r\nSUMMARY:Late night\r\nEND:VEVENT");
+  const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
+  assert.equal(layoutTimedEvents(events, "UTC").length, 0);
+});
+
+test("HOUR_LABELS covers 6am through 9pm (16 hourly rows)", () => {
+  assert.equal(HOUR_LABELS.length, 16);
+  assert.equal(HOUR_LABELS[0], "6 AM");
+  assert.equal(HOUR_LABELS[15], "9 PM");
+  assert.equal(HOUR_LABELS[6], "12 PM");
+});
+
 test("buildPayload builds a Mon-Sun week, highlights today, and clips/positions banner bars", () => {
   const bannerEvents = extractEvents(
     [
@@ -81,19 +126,23 @@ test("buildPayload builds a Mon-Sun week, highlights today, and clips/positions 
     events: [...bannerEvents, ...timedEvents],
     calendars: [{ index: 1, name: "Trips" }, { index: 2, name: "Home" }],
     todayParts: { year: 2026, month0: 6, day: 15 },
+    tz: "UTC",
   });
 
   assert.equal(payload.week_days.length, 7);
   assert.equal(payload.week_days[0].date, "2026-07-13"); // Monday first
   assert.equal(payload.weekday_labels[0], "Mon");
+  assert.equal(payload.hour_labels.length, 16);
 
   const wednesday = payload.week_days.find((d) => d.date === "2026-07-15");
   assert.equal(wednesday.is_today, true);
   assert.equal(wednesday.events[0].title, "Dentist");
+  assert.ok(wednesday.events[0].bg_shade);
 
   assert.equal(payload.multiday_events.length, 1);
   assert.equal(payload.multiday_events[0].col, 1); // clipped to Monday, the visible week's first column
   assert.equal(payload.multiday_events[0].span, 2); // only Mon-Tue of the trip fall in this week
+  assert.ok(payload.multiday_events[0].bg_shade);
 });
 
 test("weekInstantRange pads a day on each side of the visible Mon-Sun week", () => {
@@ -102,10 +151,10 @@ test("weekInstantRange pads a day on each side of the visible Mon-Sun week", () 
   assert.ok(end > new Date("2026-07-20T00:00:00Z"));
 });
 
-test("shadeFor gives each calendar a distinct grayscale class and wraps after 5", () => {
-  const shades = [1, 2, 3, 4, 5].map(shadeFor);
+test("shadeFor gives each calendar a distinct grayscale bg and wraps after 5", () => {
+  const shades = [1, 2, 3, 4, 5].map((i) => shadeFor(i).bg);
   assert.equal(new Set(shades).size, 5); // all distinct
-  assert.equal(shadeFor(6), shadeFor(1)); // wraps for a 6th calendar
+  assert.equal(shadeFor(6).bg, shadeFor(1).bg); // wraps for a 6th calendar
 });
 
 test("zonedParts reads wall-clock components in the given IANA zone", () => {

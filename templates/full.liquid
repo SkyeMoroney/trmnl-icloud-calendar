@@ -14,52 +14,86 @@
   <div class="ical-header">
     <div class="ical-title">{{ period_label }}</div>
     <div class="ical-legend">
-      {% for cal in calendars %}<span class="ical-legend-item {{ cal.shade }}">[{{ cal.index }}] {{ cal.name }}</span>{% endfor %}
+      {% for cal in calendars %}
+        <span class="ical-chip {{ cal.bg_shade }} {{ cal.text_shade }}">{{ cal.name }}</span>
+      {% endfor %}
     </div>
+  </div>
+
+  <div class="ical-daybar">
+    <div class="ical-gutter-spacer"></div>
+    {% for day in week_days %}
+      <div class="ical-daybar-cell">
+        <div class="ical-daybar-weekday">{{ day.weekday }}</div>
+        <div class="ical-daybar-date{% if day.is_today %} ical-daybar-date--today bg--black text--white{% endif %}">{{ day.day }}</div>
+      </div>
+    {% endfor %}
   </div>
 
   {% if multiday_events.size > 0 %}
     <div class="ical-banner">
       {% for bar in multiday_events limit: 4 %}
-        <div class="ical-bar {{ bar.shade }}" style="grid-column: {{ bar.col }} / span {{ bar.span }};">{{ bar.title }}</div>
+        <div class="ical-bar {{ bar.bg_shade }} {{ bar.text_shade }}" style="grid-column: {{ bar.col | plus: 1 }} / span {{ bar.span }};">{{ bar.title }}</div>
       {% endfor %}
     </div>
   {% endif %}
 
-  <div class="ical-weekdays">
-    {% for w in weekday_labels %}<div>{{ w }}</div>{% endfor %}
-  </div>
-
-  <div class="ical-week-grid">
-    {% for day in week_days %}
-      <div class="ical-day-cell{% if day.is_today %} ical-day-cell--today bg--black text--white{% endif %}">
-        <div class="ical-daynum">{{ day.day }}</div>
-        {% for ev in day.events limit: 6 %}
-          <div class="ical-event{% unless day.is_today %} {{ ev.shade }}{% endunless %}">{{ ev.time }} {{ ev.title }}</div>
-        {% endfor %}
-        {% if day.events.size > 6 %}
-          <div class="ical-more">+{{ day.events.size | minus: 6 }} more</div>
-        {% endif %}
-      </div>
-    {% endfor %}
+  <div class="ical-timegrid">
+    <div class="ical-hours">
+      {% for h in hour_labels %}<div class="ical-hour-label">{{ h }}</div>{% endfor %}
+    </div>
+    <div class="ical-days">
+      {% for day in week_days %}
+        <div class="ical-day-col{% if day.is_today %} ical-day-col--today{% endif %}">
+          {% for ev in day.events %}
+            <div class="ical-event {{ ev.bg_shade }} {{ ev.text_shade }}" style="top: {{ ev.top }}%; height: {{ ev.height }}%; left: {{ ev.left }}%; width: {{ ev.width }}%;">
+              <div class="ical-event-title">{{ ev.title }}</div>
+              <div class="ical-event-time">{{ ev.time }}</div>
+            </div>
+          {% endfor %}
+        </div>
+      {% endfor %}
+    </div>
   </div>
 </div>
 
 <style>
   .ical-wrap { display: flex; flex-direction: column; height: 100%; font-family: inherit; }
-  .ical-header { display: flex; justify-content: space-between; align-items: baseline; padding: 4px 8px; }
-  .ical-title { font-size: 26px; font-weight: 700; }
-  .ical-legend { font-size: 12px; }
-  .ical-legend-item { margin-left: 10px; font-weight: 600; }
 
-  .ical-banner { display: grid; grid-template-columns: repeat(7, 1fr); grid-auto-rows: 16px; gap: 2px; margin: 0 8px 4px; }
-  .ical-bar { border: 1px solid; font-size: 10px; font-weight: 600; padding: 1px 5px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .ical-header { display: flex; justify-content: space-between; align-items: baseline; padding: 6px 8px 4px; }
+  .ical-title { font-size: 24px; font-weight: 700; }
+  .ical-legend { display: flex; gap: 6px; }
+  .ical-chip { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 8px; }
 
-  .ical-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); font-size: 12px; font-weight: 700; text-align: center; border-bottom: 1px solid; padding-bottom: 3px; margin: 0 8px; }
-  .ical-week-grid { flex: 1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; margin: 4px 8px 8px; }
-  .ical-day-cell { border: 1px solid; padding: 3px 4px; overflow: hidden; font-size: 11px; }
-  .ical-daynum { font-weight: 700; font-size: 15px; margin-bottom: 2px; }
-  .ical-event { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .ical-more { font-style: italic; }
+  .ical-daybar { display: grid; grid-template-columns: 40px repeat(7, 1fr); padding: 0 8px; }
+  .ical-daybar-cell { text-align: center; padding: 2px 0; }
+  .ical-daybar-weekday { font-size: 11px; font-weight: 600; opacity: 0.7; }
+  .ical-daybar-date { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 12px; font-size: 15px; font-weight: 700; margin-top: 2px; }
+
+  .ical-banner { display: grid; grid-template-columns: 40px repeat(7, 1fr); grid-auto-rows: 18px; gap: 2px; padding: 2px 8px 4px; }
+  .ical-bar { border-radius: 6px; font-size: 10px; font-weight: 600; padding: 1px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+  .ical-timegrid { flex: 1; display: flex; padding: 0 8px 8px; overflow: hidden; }
+  .ical-hours { width: 40px; display: flex; flex-direction: column; }
+  .ical-hour-label { flex: 1; font-size: 9px; font-weight: 600; opacity: 0.7; transform: translateY(-0.5em); }
+  .ical-days { flex: 1; display: flex; }
+  .ical-day-col {
+    flex: 1;
+    position: relative;
+    border-left: 1px solid rgba(0, 0, 0, 0.15);
+    background-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.12) 1px, transparent 1px);
+    background-size: 100% calc(100% / 16);
+  }
+  .ical-day-col--today { background-color: rgba(0, 0, 0, 0.05); }
+
+  .ical-event {
+    position: absolute;
+    border-radius: 6px;
+    padding: 2px 4px;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .ical-event-title { font-size: 10px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .ical-event-time { font-size: 9px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 </style>
 {% endif %}

@@ -78,6 +78,7 @@ async function handleTrmnl(request) {
       events: allEvents,
       calendars: calendars.map(({ index, name }) => ({ index, name })),
       todayParts: today,
+      tz,
     });
     return Response.json(payload);
   } catch (err) {

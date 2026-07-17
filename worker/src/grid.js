@@ -7,16 +7,33 @@ const MONTH_ABBR = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
+// The visible time-grid window (Apple Calendar-style day view): 6am-10pm.
+const DAY_START_MIN = 6 * 60;
+const DAY_END_MIN = 22 * 60;
+const DAY_WINDOW_MIN = DAY_END_MIN - DAY_START_MIN;
+const MIN_BOX_HEIGHT_PCT = 4; // keeps very short events visible as a real box
+
 // TRMNL screens render 16 real grayscale levels (not just 1-bit dithering),
-// so calendars are told apart by shade instead of a "[1]"/"[2]" text prefix.
-// These are TRMNL framework text-color utility classes (trmnl.com/framework).
-const CAL_SHADES = ["text--gray-15", "text--gray-35", "text--gray-50", "text--gray-65", "text--gray-75"];
+// so calendars are told apart by a filled shade instead of a "[1]"/"[2]"
+// text prefix. bg/text are paired TRMNL framework utility classes
+// (trmnl.com/framework) chosen so the text stays readable on the fill.
+const CAL_SHADES = [
+  { bg: "bg--gray-15", text: "text--white" },
+  { bg: "bg--gray-35", text: "text--white" },
+  { bg: "bg--gray-50", text: "text--white" },
+  { bg: "bg--gray-65", text: "text--black" },
+  { bg: "bg--gray-75", text: "text--black" },
+];
 export function shadeFor(calIndex) {
   return CAL_SHADES[(calIndex - 1) % CAL_SHADES.length];
 }
 
 function pad(n) {
   return String(n).padStart(2, "0");
+}
+
+function round1(n) {
+  return Math.round(n * 10) / 10;
 }
 
 function ymdKey(year, month0, day) {
@@ -71,6 +88,15 @@ function zonedTimeLabel(date, tz) {
   return `${h12}:${pad(p.minute)} ${p.hour < 12 ? "AM" : "PM"}`;
 }
 
+function formatHourLabel(hour24) {
+  const h12 = ((hour24 + 11) % 12) + 1;
+  return `${h12} ${hour24 < 12 ? "AM" : "PM"}`;
+}
+
+// One label per hour row, 6am through 9pm (the last of the 16 one-hour rows
+// spans 9pm-10pm).
+export const HOUR_LABELS = Array.from({ length: 16 }, (_, i) => formatHourLabel(6 + i));
+
 // The UTC instant range that covers the visible Mon-Sun week for
 // (year, month0, day), padded a day on each side to absorb time zone shifts.
 export function weekInstantRange(year, month0, day) {
@@ -112,7 +138,7 @@ export function extractEvents(icsBlobs, rangeStart, rangeEnd, calIndex, tz) {
       if (allDay) durationSeconds = Math.max(durationSeconds, 86400); // guard malformed all-day events with no/zero DTEND
 
       const pushOccurrence = (icalTime) => {
-        let date, dayKey, endDayKey, timeLabel;
+        let date, end, dayKey, endDayKey, timeLabel;
         if (allDay) {
           // VALUE=DATE times are "floating" (no zone) — ICAL.Time#toJSDate would
           // silently reinterpret them in the runtime's local timezone, shifting
@@ -124,17 +150,19 @@ export function extractEvents(icsBlobs, rangeStart, rangeEnd, calIndex, tz) {
           endDayKey = ymdKey(endInclusive.year, endInclusive.month0, endInclusive.day);
           timeLabel = "All day";
           date = new Date(Date.UTC(icalTime.year, icalTime.month - 1, icalTime.day));
+          end = null;
         } else {
           date = icalTime.toJSDate();
-          // End instant is exclusive: an event ending exactly at midnight
+          end = new Date(date.getTime() + durationSeconds * 1000);
+          // Exclusive-end boundary: an event ending exactly at midnight
           // (e.g. 11pm-12am) shouldn't count as touching the next day.
-          const endRaw = new Date(date.getTime() + durationSeconds * 1000 - 1);
           dayKey = zonedDateKey(date, tz);
-          endDayKey = zonedDateKey(endRaw, tz);
+          endDayKey = zonedDateKey(new Date(end.getTime() - 1), tz);
           timeLabel = zonedTimeLabel(date, tz);
         }
         events.push({
           date,
+          end,
           dayKey,
           endDayKey,
           timeLabel,
@@ -163,7 +191,76 @@ export function extractEvents(icsBlobs, rangeStart, rangeEnd, calIndex, tz) {
   return events;
 }
 
-function buildWeekDays(year, month0, day, timedEventsByDay, todayKey) {
+// Positions one day's timed events as boxes in the 6am-10pm grid: top/height
+// from start/end time, and left/width/numCols from a greedy column-packing
+// pass so overlapping events sit side by side instead of stacking illegibly.
+// ponytail: this exists — approximates each overlap cluster with one shared
+// column count rather than a fully optimal skyline packing; fine for the
+// handful of concurrent events a family calendar actually has.
+export function layoutTimedEvents(dayEvents, tz) {
+  const withMinutes = dayEvents
+    .map((ev) => {
+      const startP = zonedParts(ev.date, tz);
+      const endP = zonedParts(ev.end, tz);
+      const startMin = startP.hour * 60 + startP.minute;
+      const endMin = Math.max(endP.hour * 60 + endP.minute, startMin + 15); // guard zero/negative-duration entries
+      return { ...ev, startMin, endMin };
+    })
+    .map((ev) => ({
+      ...ev,
+      clampedStart: Math.max(ev.startMin, DAY_START_MIN),
+      clampedEnd: Math.min(ev.endMin, DAY_END_MIN),
+    }))
+    .filter((ev) => ev.clampedStart < ev.clampedEnd) // drop events entirely outside the visible window
+    .sort((a, b) => a.clampedStart - b.clampedStart || a.clampedEnd - b.clampedEnd);
+
+  const laidOut = [];
+  let cluster = [];
+  let clusterEnd = -Infinity;
+  let columnEnds = [];
+
+  const finalizeCluster = () => {
+    const numCols = columnEnds.length || 1;
+    for (const ev of cluster) laidOut.push({ ...ev, numCols });
+    cluster = [];
+    columnEnds = [];
+  };
+
+  for (const ev of withMinutes) {
+    if (ev.clampedStart >= clusterEnd) {
+      finalizeCluster();
+      clusterEnd = -Infinity;
+    }
+    let col = columnEnds.findIndex((end) => end <= ev.clampedStart);
+    if (col === -1) {
+      col = columnEnds.length;
+      columnEnds.push(ev.clampedEnd);
+    } else {
+      columnEnds[col] = ev.clampedEnd;
+    }
+    cluster.push({ ...ev, col });
+    clusterEnd = Math.max(clusterEnd, ev.clampedEnd);
+  }
+  finalizeCluster();
+
+  return laidOut.map((ev) => {
+    const shade = shadeFor(ev.calIndex);
+    const width = 100 / ev.numCols;
+    return {
+      title: ev.title,
+      cal: ev.calIndex,
+      bg_shade: shade.bg,
+      text_shade: shade.text,
+      time: ev.timeLabel,
+      top: round1(((ev.clampedStart - DAY_START_MIN) / DAY_WINDOW_MIN) * 100),
+      height: round1(Math.max(((ev.clampedEnd - ev.clampedStart) / DAY_WINDOW_MIN) * 100, MIN_BOX_HEIGHT_PCT)),
+      left: round1(ev.col * width),
+      width: round1(Math.max(width - 2, 4)), // small gutter between adjacent columns
+    };
+  });
+}
+
+function buildWeekDays(year, month0, day, timedEventsByDay, todayKey, tz) {
   const monday = mondayOfWeek(year, month0, day);
   const days = [];
   for (let i = 0; i < 7; i++) {
@@ -172,10 +269,9 @@ function buildWeekDays(year, month0, day, timedEventsByDay, todayKey) {
     days.push({
       date: key,
       day: cell.day,
+      weekday: WEEKDAY_LABELS_MON_FIRST[i],
       is_today: key === todayKey,
-      events: (timedEventsByDay.get(key) || []).map(({ title, calIndex, timeLabel }) => ({
-        title, cal: calIndex, time: timeLabel, shade: shadeFor(calIndex),
-      })),
+      events: layoutTimedEvents(timedEventsByDay.get(key) || [], tz),
     });
   }
   return days;
@@ -194,7 +290,15 @@ function buildMultidayBars(events, weekKeys) {
     const clippedEnd = ev.endDayKey > weekEndKey ? weekEndKey : ev.endDayKey;
     const startCol = weekKeys.indexOf(clippedStart) + 1;
     const endCol = weekKeys.indexOf(clippedEnd) + 1;
-    bars.push({ title: ev.title, cal: ev.calIndex, shade: shadeFor(ev.calIndex), col: startCol, span: endCol - startCol + 1 });
+    const shade = shadeFor(ev.calIndex);
+    bars.push({
+      title: ev.title,
+      cal: ev.calIndex,
+      bg_shade: shade.bg,
+      text_shade: shade.text,
+      col: startCol,
+      span: endCol - startCol + 1,
+    });
   }
   bars.sort((a, b) => a.col - b.col || b.span - a.span);
   return bars;
@@ -217,7 +321,7 @@ function dayLabel(dayKey, todayKey, tomorrowKey) {
   return `${weekday} ${d}`;
 }
 
-export function buildPayload({ year, month0, day, events, calendars, todayParts }) {
+export function buildPayload({ year, month0, day, events, calendars, todayParts, tz }) {
   const todayKey = ymdKey(todayParts.year, todayParts.month0, todayParts.day);
   const tomorrow = daysAdd(todayParts.year, todayParts.month0, todayParts.day, 1);
   const tomorrowKey = ymdKey(tomorrow.year, tomorrow.month0, tomorrow.day);
@@ -228,31 +332,36 @@ export function buildPayload({ year, month0, day, events, calendars, todayParts 
     if (!timedEventsByDay.has(ev.dayKey)) timedEventsByDay.set(ev.dayKey, []);
     timedEventsByDay.get(ev.dayKey).push(ev);
   }
-  for (const list of timedEventsByDay.values()) {
-    list.sort((a, b) => a.date - b.date);
-  }
 
   const weekKeys = weekDayKeys(year, month0, day);
-  const week_days = buildWeekDays(year, month0, day, timedEventsByDay, todayKey);
+  const week_days = buildWeekDays(year, month0, day, timedEventsByDay, todayKey, tz);
   const multiday_events = buildMultidayBars(events, weekKeys);
 
   const next_events = [...events]
     .filter((ev) => ev.dayKey >= todayKey)
     .sort((a, b) => a.date - b.date)
     .slice(0, 8)
-    .map((ev) => ({
-      label: dayLabel(ev.dayKey, todayKey, tomorrowKey),
-      time: ev.timeLabel,
-      title: ev.title,
-      cal: ev.calIndex,
-      shade: shadeFor(ev.calIndex),
-    }));
+    .map((ev) => {
+      const shade = shadeFor(ev.calIndex);
+      return {
+        label: dayLabel(ev.dayKey, todayKey, tomorrowKey),
+        time: ev.timeLabel,
+        title: ev.title,
+        cal: ev.calIndex,
+        bg_shade: shade.bg,
+        text_shade: shade.text,
+      };
+    });
 
   return {
     has_data: true,
     period_label: formatWeekLabel(weekKeys),
     weekday_labels: WEEKDAY_LABELS_MON_FIRST,
-    calendars: calendars.map((c) => ({ ...c, shade: shadeFor(c.index) })),
+    hour_labels: HOUR_LABELS,
+    calendars: calendars.map((c) => {
+      const shade = shadeFor(c.index);
+      return { ...c, bg_shade: shade.bg, text_shade: shade.text };
+    }),
     week_days,
     multiday_events,
     next_events,
