@@ -12,6 +12,7 @@ const DAY_START_MIN = 6 * 60;
 const DAY_END_MIN = 22 * 60;
 const DAY_WINDOW_MIN = DAY_END_MIN - DAY_START_MIN;
 const MIN_BOX_HEIGHT_PCT = 4; // keeps very short events visible as a real box
+const STAGGER_OFFSET_PCT = 14; // exactly-2-way overlaps cascade instead of splitting
 
 // TRMNL screens render 16 real grayscale levels (not just 1-bit dithering),
 // so calendars are told apart by a filled shade instead of a "[1]"/"[2]"
@@ -192,8 +193,12 @@ export function extractEvents(icsBlobs, rangeStart, rangeEnd, calIndex, tz) {
 }
 
 // Positions one day's timed events as boxes in the 6am-10pm grid: top/height
-// from start/end time, and left/width/numCols from a greedy column-packing
-// pass so overlapping events sit side by side instead of stacking illegibly.
+// from start/end time, left/width/z from a greedy column-packing pass so
+// overlapping events don't stack illegibly. Exactly-2-way overlaps cascade
+// (each card nearly full width, later one layered on top) since that reads
+// better with only two things to disambiguate; 3+-way overlaps fall back to
+// an even column split, since staggered peeks of 2-3 chars each get visually
+// ambiguous once there's more than one seam to spot.
 // ponytail: this exists — approximates each overlap cluster with one shared
 // column count rather than a fully optimal skyline packing; fine for the
 // handful of concurrent events a family calendar actually has.
@@ -245,7 +250,15 @@ export function layoutTimedEvents(dayEvents, tz) {
 
   return laidOut.map((ev) => {
     const shade = shadeFor(ev.calIndex);
-    const width = 100 / ev.numCols;
+    let left, width;
+    if (ev.numCols === 2) {
+      left = ev.col * STAGGER_OFFSET_PCT;
+      width = 100 - left;
+    } else {
+      const colWidth = 100 / ev.numCols;
+      left = ev.col * colWidth;
+      width = Math.max(colWidth - 2, 4); // small gutter between adjacent columns
+    }
     return {
       title: ev.title,
       cal: ev.calIndex,
@@ -254,8 +267,9 @@ export function layoutTimedEvents(dayEvents, tz) {
       time: ev.timeLabel,
       top: round1(((ev.clampedStart - DAY_START_MIN) / DAY_WINDOW_MIN) * 100),
       height: round1(Math.max(((ev.clampedEnd - ev.clampedStart) / DAY_WINDOW_MIN) * 100, MIN_BOX_HEIGHT_PCT)),
-      left: round1(ev.col * width),
-      width: round1(Math.max(width - 2, 4)), // small gutter between adjacent columns
+      left: round1(left),
+      width: round1(width),
+      z: ev.col,
     };
   });
 }

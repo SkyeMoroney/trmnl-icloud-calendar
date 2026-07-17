@@ -49,7 +49,7 @@
             <div class="ical-now-line" style="top: {{ day.now_line_top }}%;"></div>
           {% endif %}
           {% for ev in day.events %}
-            <div class="ical-event {{ ev.bg_shade }} {{ ev.text_shade }}" style="top: {{ ev.top }}%; height: {{ ev.height }}%; left: {{ ev.left }}%; width: {{ ev.width }}%;">
+            <div class="ical-event {{ ev.bg_shade }} {{ ev.text_shade }}" style="top: {{ ev.top }}%; height: {{ ev.height }}%; left: {{ ev.left }}%; width: {{ ev.width }}%; z-index: {{ ev.z | plus: 1 }};">
               <div class="ical-event-title">{{ ev.title }}</div>
               <div class="ical-event-time">{{ ev.time }}</div>
             </div>
@@ -74,7 +74,7 @@
   .ical-daybar-date { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 12px; font-size: 15px; font-weight: 700; margin-top: 2px; }
 
   .ical-banner { display: grid; grid-template-columns: 40px repeat(7, 1fr); grid-auto-rows: 18px; gap: 2px; padding: 2px 8px 4px; }
-  .ical-bar { border-radius: 6px; font-size: 10px; font-weight: 600; padding: 1px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .ical-bar { border: 1px solid; border-radius: 6px; font-size: 10px; font-weight: 600; padding: 1px 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
   .ical-timegrid { flex: 1; display: flex; padding: 0 8px 8px; overflow: hidden; }
   .ical-hours { width: 40px; display: flex; flex-direction: column; }
@@ -91,10 +91,12 @@
 
   .ical-event {
     position: absolute;
+    border: 1px solid;
     border-radius: 6px;
     padding: 2px 4px;
     overflow: hidden;
     box-sizing: border-box;
+    box-shadow: -2px 0 3px rgba(0, 0, 0, 0.25);
   }
   .ical-event-title { font-size: 10px; font-weight: 700; line-height: 1.15; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .ical-event-time { font-size: 9px; line-height: 1.1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

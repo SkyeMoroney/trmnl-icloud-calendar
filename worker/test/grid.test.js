@@ -76,7 +76,7 @@ test("layoutTimedEvents positions a 9am-5pm event correctly in the 6am-10pm grid
   assert.equal(box.width, 98); // full width minus the gutter
 });
 
-test("layoutTimedEvents splits two overlapping events into side-by-side columns", () => {
+test("layoutTimedEvents cascades an exactly-2-way overlap instead of splitting evenly", () => {
   const blob = ics(
     "BEGIN:VEVENT\r\nUID:8\r\nDTSTART:20260715T105000Z\r\nDTEND:20260715T111500Z\r\nSUMMARY:Cut A\r\nEND:VEVENT\r\n" +
       "BEGIN:VEVENT\r\nUID:9\r\nDTSTART:20260715T105000Z\r\nDTEND:20260715T111500Z\r\nSUMMARY:Cut B\r\nEND:VEVENT"
@@ -84,8 +84,28 @@ test("layoutTimedEvents splits two overlapping events into side-by-side columns"
   const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
   const boxes = layoutTimedEvents(events, "UTC");
   assert.equal(boxes.length, 2);
-  assert.deepEqual(boxes.map((b) => b.left).sort((a, b) => a - b), [0, 50]);
-  assert.ok(boxes.every((b) => b.width < 50)); // narrower than full width since they share the row
+  const [first, second] = [...boxes].sort((a, b) => a.left - b.left);
+  // Both cards extend to the right edge (left + width = 100); the underneath
+  // card (first) is only *visually* reduced to its 14%-wide left sliver
+  // because the front card (second, higher z) paints over the rest of it.
+  assert.equal(first.left, 0);
+  assert.equal(first.width, 100);
+  assert.equal(second.left, 14); // STAGGER_OFFSET_PCT
+  assert.equal(second.width, 86);
+  assert.ok(second.z > first.z); // front card must paint on top to be the one fully readable
+});
+
+test("layoutTimedEvents falls back to an even column split for 3+-way overlaps", () => {
+  const blob = ics(
+    "BEGIN:VEVENT\r\nUID:11\r\nDTSTART:20260715T090000Z\r\nDTEND:20260715T100000Z\r\nSUMMARY:A\r\nEND:VEVENT\r\n" +
+      "BEGIN:VEVENT\r\nUID:12\r\nDTSTART:20260715T090000Z\r\nDTEND:20260715T100000Z\r\nSUMMARY:B\r\nEND:VEVENT\r\n" +
+      "BEGIN:VEVENT\r\nUID:13\r\nDTSTART:20260715T090000Z\r\nDTEND:20260715T100000Z\r\nSUMMARY:C\r\nEND:VEVENT"
+  );
+  const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
+  const boxes = layoutTimedEvents(events, "UTC");
+  assert.equal(boxes.length, 3);
+  assert.deepEqual(boxes.map((b) => b.left).sort((a, b) => a - b), [0, 33.3, 66.7]);
+  assert.ok(boxes.every((b) => b.width < 34)); // even split, not staggered
 });
 
 test("layoutTimedEvents drops events entirely outside the 6am-10pm window", () => {
