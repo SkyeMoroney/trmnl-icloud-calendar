@@ -20,7 +20,7 @@ const MIN_BOX_HEIGHT_PCT = 4; // keeps very short events visible as a real box
 const CAL_SHADES = [
   { bg: "bg--gray-15", text: "text--white" },
   { bg: "bg--gray-35", text: "text--white" },
-  { bg: "bg--gray-50", text: "text--white" },
+  { bg: "bg--gray-50", text: "text--black" },
   { bg: "bg--gray-65", text: "text--black" },
   { bg: "bg--gray-75", text: "text--black" },
 ];
