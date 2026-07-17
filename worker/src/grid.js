@@ -7,9 +7,9 @@ const MONTH_ABBR = [
   "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
 ];
 
-// The visible time-grid window (Apple Calendar-style day view): 6am-10pm.
-const DAY_START_MIN = 6 * 60;
-const DAY_END_MIN = 22 * 60;
+// The visible time-grid window (Apple Calendar-style day view): 7am-7pm.
+const DAY_START_MIN = 7 * 60;
+const DAY_END_MIN = 19 * 60;
 const DAY_WINDOW_MIN = DAY_END_MIN - DAY_START_MIN;
 const MIN_BOX_HEIGHT_PCT = 4; // keeps very short events visible as a real box
 const STAGGER_OFFSET_PCT = 14; // exactly-2-way overlaps cascade instead of splitting
@@ -18,12 +18,15 @@ const STAGGER_OFFSET_PCT = 14; // exactly-2-way overlaps cascade instead of spli
 // so calendars are told apart by a filled shade instead of a "[1]"/"[2]"
 // text prefix. bg/text are paired TRMNL framework utility classes
 // (trmnl.com/framework) chosen so the text stays readable on the fill.
+// `border` is a text-color class one step darker than `bg`, applied via
+// currentColor for a subtle left accent (there's no dedicated border-color
+// utility, but border-color: currentColor + a text-color class works).
 const CAL_SHADES = [
-  { bg: "bg--gray-15", text: "text--white" },
-  { bg: "bg--gray-35", text: "text--black" },
-  { bg: "bg--gray-50", text: "text--black" },
-  { bg: "bg--gray-65", text: "text--black" },
-  { bg: "bg--gray-75", text: "text--black" },
+  { bg: "bg--gray-15", text: "text--white", border: "text--black" },
+  { bg: "bg--gray-35", text: "text--black", border: "text--gray-15" },
+  { bg: "bg--gray-50", text: "text--black", border: "text--gray-35" },
+  { bg: "bg--gray-65", text: "text--black", border: "text--gray-50" },
+  { bg: "bg--gray-75", text: "text--black", border: "text--gray-65" },
 ];
 export function shadeFor(calIndex) {
   return CAL_SHADES[(calIndex - 1) % CAL_SHADES.length];
@@ -94,9 +97,9 @@ function formatHourLabel(hour24) {
   return `${h12} ${hour24 < 12 ? "AM" : "PM"}`;
 }
 
-// One label per hour row, 6am through 9pm (the last of the 16 one-hour rows
-// spans 9pm-10pm).
-export const HOUR_LABELS = Array.from({ length: 16 }, (_, i) => formatHourLabel(6 + i));
+// One label per hour row, 7am through 6pm (the last of the 12 one-hour rows
+// spans 6pm-7pm).
+export const HOUR_LABELS = Array.from({ length: 12 }, (_, i) => formatHourLabel(7 + i));
 
 // The UTC instant range that covers the visible Mon-Sun week for
 // (year, month0, day), padded a day on each side to absorb time zone shifts.
@@ -192,7 +195,7 @@ export function extractEvents(icsBlobs, rangeStart, rangeEnd, calIndex, tz) {
   return events;
 }
 
-// Positions one day's timed events as boxes in the 6am-10pm grid: top/height
+// Positions one day's timed events as boxes in the 7am-7pm grid: top/height
 // from start/end time, left/width/z from a greedy column-packing pass so
 // overlapping events don't stack illegibly.
 //
@@ -299,6 +302,7 @@ export function layoutTimedEvents(dayEvents, tz) {
       cal: ev.calIndex,
       bg_shade: shade.bg,
       text_shade: shade.text,
+      border_shade: shade.border,
       time: ev.timeLabel,
       top: round1(((ev.clampedStart - DAY_START_MIN) / DAY_WINDOW_MIN) * 100),
       height: round1(Math.max(((ev.clampedEnd - ev.clampedStart) / DAY_WINDOW_MIN) * 100, MIN_BOX_HEIGHT_PCT)),
@@ -309,7 +313,7 @@ export function layoutTimedEvents(dayEvents, tz) {
   });
 }
 
-// Position of the "now" line within the 6am-10pm grid, rounded to the
+// Position of the "now" line within the 7am-7pm grid, rounded to the
 // nearest 15 minutes since that's how often the plugin actually refreshes —
 // showing it to exact-minute precision would just look stale between polls.
 // Returns null when "now" falls outside the visible window.
@@ -358,6 +362,7 @@ function buildMultidayBars(events, weekKeys) {
       cal: ev.calIndex,
       bg_shade: shade.bg,
       text_shade: shade.text,
+      border_shade: shade.border,
       col: startCol,
       span: endCol - startCol + 1,
     });

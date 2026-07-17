@@ -64,14 +64,14 @@ test("extractEvents flags a single-day all-day event as a banner too (iCal conve
   assert.equal(events[0].endDayKey, "2026-07-15");
 });
 
-test("layoutTimedEvents positions a 9am-5pm event correctly in the 6am-10pm grid", () => {
+test("layoutTimedEvents positions a 9am-5pm event correctly in the 7am-7pm grid", () => {
   const blob = ics(
     "BEGIN:VEVENT\r\nUID:7\r\nDTSTART:20260715T090000Z\r\nDTEND:20260715T170000Z\r\nSUMMARY:Interviews\r\nEND:VEVENT"
   );
   const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
   const [box] = layoutTimedEvents(events, "UTC");
-  assert.equal(box.top, 18.8); // (9am-6am)/16h = 18.75%, rounded to 1dp
-  assert.equal(box.height, 50); // 8h/16h = 50%
+  assert.equal(box.top, 16.7); // (9am-7am)/12h = 16.67%, rounded to 1dp
+  assert.equal(box.height, 66.7); // 8h/12h = 66.67%
   assert.equal(box.left, 0);
   assert.equal(box.width, 98); // full width minus the gutter
 });
@@ -154,17 +154,17 @@ test("layoutTimedEvents cascades a long appointment behind a same-start pair lan
   assert.ok(podiatryA.width < 50 && podiatryB.width < 50);
 });
 
-test("layoutTimedEvents drops events entirely outside the 6am-10pm window", () => {
+test("layoutTimedEvents drops events entirely outside the 7am-7pm window", () => {
   const blob = ics("BEGIN:VEVENT\r\nUID:10\r\nDTSTART:20260715T023000Z\r\nDTEND:20260715T030000Z\r\nSUMMARY:Late night\r\nEND:VEVENT");
   const events = extractEvents([blob], WEEK_RANGE.start, WEEK_RANGE.end, 1, "UTC");
   assert.equal(layoutTimedEvents(events, "UTC").length, 0);
 });
 
-test("HOUR_LABELS covers 6am through 9pm (16 hourly rows)", () => {
-  assert.equal(HOUR_LABELS.length, 16);
-  assert.equal(HOUR_LABELS[0], "6 AM");
-  assert.equal(HOUR_LABELS[15], "9 PM");
-  assert.equal(HOUR_LABELS[6], "12 PM");
+test("HOUR_LABELS covers 7am through 6pm (12 hourly rows)", () => {
+  assert.equal(HOUR_LABELS.length, 12);
+  assert.equal(HOUR_LABELS[0], "7 AM");
+  assert.equal(HOUR_LABELS[11], "6 PM");
+  assert.equal(HOUR_LABELS[5], "12 PM");
 });
 
 test("buildPayload builds a Mon-Sun week, highlights today, and clips/positions banner bars", () => {
@@ -198,7 +198,7 @@ test("buildPayload builds a Mon-Sun week, highlights today, and clips/positions 
   assert.equal(payload.week_days.length, 7);
   assert.equal(payload.week_days[0].date, "2026-07-13"); // Monday first
   assert.equal(payload.weekday_labels[0], "Mon");
-  assert.equal(payload.hour_labels.length, 16);
+  assert.equal(payload.hour_labels.length, 12);
 
   const wednesday = payload.week_days.find((d) => d.date === "2026-07-15");
   assert.equal(wednesday.is_today, true);
@@ -210,13 +210,13 @@ test("buildPayload builds a Mon-Sun week, highlights today, and clips/positions 
   assert.equal(payload.multiday_events[0].span, 2); // only Mon-Tue of the trip fall in this week
   assert.ok(payload.multiday_events[0].bg_shade);
 
-  // 1:00pm -> (13*60 - 6*60) / (16*60) * 100 = 43.75 -> 43.8
-  assert.equal(wednesday.now_line_top, 43.8);
+  // 1:00pm -> (13*60 - 7*60) / (12*60) * 100 = 50
+  assert.equal(wednesday.now_line_top, 50);
   const otherDay = payload.week_days.find((d) => d.date === "2026-07-13");
   assert.equal(otherDay.now_line_top, null);
 });
 
-test("now_line_top rounds to the nearest 15 minutes and hides outside the 6am-10pm window", () => {
+test("now_line_top rounds to the nearest 15 minutes and hides outside the 7am-7pm window", () => {
   const base = {
     year: 2026,
     month0: 6,
@@ -226,11 +226,11 @@ test("now_line_top rounds to the nearest 15 minutes and hides outside the 6am-10
     tz: "UTC",
   };
 
-  // 9:07am rounds to 9:00 -> (9*60-360)/960*100 = 18.75 -> 18.8
+  // 9:07am rounds to 9:00 -> (9*60-420)/720*100 = 16.67 -> 16.7
   const morning = buildPayload({ ...base, todayParts: { year: 2026, month0: 6, day: 15, hour: 9, minute: 7 } });
-  assert.equal(morning.week_days.find((d) => d.is_today).now_line_top, 18.8);
+  assert.equal(morning.week_days.find((d) => d.is_today).now_line_top, 16.7);
 
-  // 11:00pm is outside the visible 6am-10pm window
+  // 11:00pm is outside the visible 7am-7pm window
   const late = buildPayload({ ...base, todayParts: { year: 2026, month0: 6, day: 15, hour: 23, minute: 0 } });
   assert.equal(late.week_days.find((d) => d.is_today).now_line_top, null);
 });
