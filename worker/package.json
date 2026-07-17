@@ -1,0 +1,17 @@
+{
+  "name": "trmnl-icloud-calendar-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "fast-xml-parser": "^4.5.7",
+    "ical.js": "^2.2.1"
+  }
+}

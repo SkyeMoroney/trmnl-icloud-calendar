@@ -1,0 +1,12 @@
+name = "trmnl-icloud-calendar"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Stateless worker: no KV/D1 needed. Apple ID + app-specific password
+# arrive fresh on every request from TRMNL (as a plugin custom field),
+# nothing is stored server-side.
+#
+# This file only exists for the "Deploy to Cloudflare" button — each
+# installer forks the repo and deploys their own copy into their own
+# Cloudflare account. Nobody needs to run `wrangler` themselves.

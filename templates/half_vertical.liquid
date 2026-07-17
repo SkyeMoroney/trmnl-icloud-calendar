@@ -1,0 +1,23 @@
+{% render 'shared' %}
+{% if has_data %}
+<div class="ical-agenda">
+  <div class="ical-agenda-title">Upcoming</div>
+  <div class="ical-agenda-list">
+    {% for ev in next_events limit: 5 %}
+      <div class="ical-agenda-row">
+        <div class="ical-agenda-when">{{ ev.label }} · {{ ev.time }}</div>
+        <div class="ical-agenda-what {{ ev.shade }}">{{ ev.title }}</div>
+      </div>
+    {% endfor %}
+  </div>
+</div>
+
+<style>
+  .ical-agenda { display: flex; flex-direction: column; height: 100%; padding: 6px 8px; }
+  .ical-agenda-title { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+  .ical-agenda-list { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+  .ical-agenda-row { font-size: 12px; border-bottom: 1px dotted; padding-bottom: 3px; }
+  .ical-agenda-when { font-weight: 600; }
+  .ical-agenda-what { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+{% endif %}

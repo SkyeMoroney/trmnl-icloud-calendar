@@ -1,0 +1,82 @@
+name: iCloud Multi-Calendar
+strategy: polling
+polling_verb: get
+refresh_interval: 60
+no_screen_padding: no
+dark_mode: no
+
+# worker_url is each installer's own deployed backend (see README —
+# "Deploy to Cloudflare" button), so this recipe has no URL tied to the
+# plugin author. Selected calendar hrefs travel as query params (not
+# secret); Apple ID and app-specific password travel as headers so they
+# don't end up in URL logs.
+polling_url: >-
+  {{ worker_url }}/trmnl?tz={{ time_zone }}&cal1={{ calendar_1 }}&cal2={{ calendar_2 }}&cal3={{ calendar_3 }}&cal4={{ calendar_4 }}&cal5={{ calendar_5 }}
+
+polling_headers: |
+  X-Apple-Id: {{ apple_id }}
+  X-App-Password: {{ app_password }}
+
+custom_fields:
+  - keyname: worker_url
+    name: Your Backend URL
+    field_type: url
+    description: >-
+      Deploy your own copy of the backend first (one click — see the
+      "Deploy to Cloudflare" button in this plugin's repo), then paste the
+      URL it gives you here, e.g. https://trmnl-icloud-calendar.yourname.workers.dev
+      (no trailing slash).
+
+  - keyname: apple_id
+    name: Apple ID
+    field_type: string
+    description: Your iCloud email address (e.g. name@icloud.com).
+
+  - keyname: app_password
+    name: App-Specific Password
+    field_type: password
+    description: >-
+      Generate one at appleid.apple.com &rarr; Sign-In and Security &rarr;
+      App-Specific Passwords. Do not use your real Apple ID password.
+
+  - keyname: time_zone
+    name: Time Zone
+    field_type: time_zone
+    optional: true
+    default: Australia/Perth
+    description: Used to decide "today" and which day an event falls on. Defaults to Perth if left blank.
+
+  - keyname: calendar_1
+    name: Calendar 1
+    field_type: xhrSelect
+    endpoint: "{{ worker_url }}/calendars"
+    depends_on: app_password
+    description: Fill in Backend URL + Apple ID + App-Specific Password above, then reopen this dropdown.
+
+  - keyname: calendar_2
+    name: Calendar 2
+    field_type: xhrSelect
+    endpoint: "{{ worker_url }}/calendars"
+    depends_on: app_password
+    optional: true
+
+  - keyname: calendar_3
+    name: Calendar 3
+    field_type: xhrSelect
+    endpoint: "{{ worker_url }}/calendars"
+    depends_on: app_password
+    optional: true
+
+  - keyname: calendar_4
+    name: Calendar 4
+    field_type: xhrSelect
+    endpoint: "{{ worker_url }}/calendars"
+    depends_on: app_password
+    optional: true
+
+  - keyname: calendar_5
+    name: Calendar 5
+    field_type: xhrSelect
+    endpoint: "{{ worker_url }}/calendars"
+    depends_on: app_password
+    optional: true
